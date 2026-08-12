@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Виробничий Сканер</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 400px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #333; margin-top: 0; }
+        
+        #auth-section { display: block; }
+        input[type="email"] { width: 100%; padding: 12px; margin: 10px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
+        button.primary { width: 100%; padding: 12px; background-color: #0078D4; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        
+        #error-msg { color: #d9534f; font-weight: bold; text-align: center; margin-top: 10px; display: none; }
+        
+        #scanner-section { display: none; }
+        #reader { width: 100%; margin-bottom: 20px; }
+        
+        #scanned-list { list-style: none; padding: 0; margin: 0 0 20px 0; max-height: 150px; overflow-y: auto; border: 1px solid #eee; }
+        #scanned-list li { padding: 10px; border-bottom: 1px solid #eee; background: #f9f9f9; font-family: monospace; font-size: 16px; display: flex; justify-content: space-between; }
+        
+        .process-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        button.process-btn { padding: 15px 10px; background-color: #28a745; color: white; border: none; border-radius: 5px; font-size: 14px; font-weight: bold; cursor: pointer; }
+        button.process-btn:active { background-color: #218838; }
+        
+        .user-info { text-align: center; font-size: 14px; color: #666; margin-bottom: 15px; }
+        .user-info a { color: #d9534f; text-decoration: none; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <div id="auth-section">
+        <h2>Вхід у систему</h2>
+        <input type="email" id="email-input" placeholder="Введіть дозволену пошту" required>
+        <button class="primary" onclick="saveEmail()">Увійти</button>
+        <div id="error-msg">Доступ заборонено! Пошти немає в базі.</div>
+    </div>
+
+    <div id="scanner-section">
+        <div class="user-info">
+            Працює: <span id="current-user"></span> 
+            (<a onclick="logout()">Змінити</a>)
+        </div>
+
+        <div id="reader"></div>
+        <h3 style="margin-bottom: 5px;">Відскановано (<span id="scan-count">0</span>):</h3>
+        <ul id="scanned-list"></ul>
+
+        <h3 style="margin-bottom: 10px;">Оберіть процес:</h3>
+        <div class="process-grid">
+            <button class="process-btn" onclick="sendData('Зварювання 21700')">Зварювання 21700</button>
+            <button class="process-btn" onclick="sendData('Збірка 6s')">Збірка 6s</button>
+            <button class="process-btn" onclick="sendData('Збірка 8s')">Збірка 8s</button>
+            <button class="process-btn" style="background-color: #ffc107; color: #333;" onclick="sendData('Тестування')">Тестування ВТК</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const WEBHOOK_URL = "ВСТАВТЕ_ВАШ_WEBHOOK_URL_СЮДИ";
+
+    // ==========================================
+    // ТУТ СПИСОК ДОЗВОЛЕНИХ ПОШТ ПРАЦІВНИКІВ
+    // Вписуйте їх у лапках, через кому, малими літерами
+    // ==========================================
+    const allowedEmails = [
+        "ivanenko@gmail.com",
+        "petrenko@ukr.net",
+        "vlad@gmail.com",
+        "test@test.com"
+    ];
+    // ==========================================
+
+    let scannedItems = new Set();
+    let html5QrcodeScanner;
+
+    window.onload = function() {
+        const savedEmail = localStorage.getItem("workerEmail");
+        if (savedEmail && allowedEmails.includes(savedEmail)) {
+            showScanner(savedEmail);
+        } else {
+            logout(); // Якщо пошта є, але її видалили зі списку - викидаємо
+        }
+    };
+
+    function saveEmail() {
+        const emailInput = document.getElementById("email-input").value.trim().toLowerCase();
+        const errorMsg = document.getElementById("error-msg");
+        
+        if (emailInput === "") {
+            alert("Введіть пошту!");
+            return;
+        }
+
+        // ПЕРЕВІРКА: чи є введена пошта у нашому списку allowedEmails
+        if (allowedEmails.includes(emailInput)) {
+            errorMsg.style.display = "none";
+            localStorage.setItem("workerEmail", emailInput);
+            showScanner(emailInput);
+        } else {
+            errorMsg.style.display = "block"; // Показуємо помилку
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem("workerEmail");
+        document.getElementById("auth-section").style.display = "block";
+        document.getElementById("scanner-section").style.display = "none";
+        document.getElementById("email-input").value = "";
+        document.getElementById("error-msg").style.display = "none";
+        if(html5QrcodeScanner) { html5QrcodeScanner.clear(); }
+    }
+
+    function showScanner(email) {
+        document.getElementById("auth-section").style.display = "none";
+        document.getElementById("scanner-section").style.display = "block";
+        document.getElementById("current-user").innerText = email;
+        startCamera();
+    }
+
+    function startCamera() {
+        html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+            fps: 10, 
+            qrbox: {width: 250, height: 250},
+            aspectRatio: 1.0,
+            disableFlip: false 
+        });
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        if (!scannedItems.has(decodedText)) {
+            scannedItems.add(decodedText);
+            updateScannedUI();
+            if (navigator.vibrate) { navigator.vibrate(100); }
+        }
+    }
+
+    function onScanFailure(error) {}
+
+    function updateScannedUI() {
+        const listElement = document.getElementById("scanned-list");
+        const countElement = document.getElementById("scan-count");
+        listElement.innerHTML = "";
+        scannedItems.forEach(item => {
+            const li = document.createElement("li");
+            li.innerText = item;
+            listElement.appendChild(li);
+        });
+        countElement.innerText = scannedItems.size;
+    }
+
+    function sendData(processName) {
+        if (scannedItems.size === 0) {
+            alert("Відскануйте хоча б один виріб!");
+            return;
+        }
+
+        const email = localStorage.getItem("workerEmail");
+        const itemsArray = Array.from(scannedItems);
+        const payload = {
+            "workerEmail": email,
+            "process": processName,
+            "serialNumbers": itemsArray,
+            "timestamp": new Date().toISOString()
+        };
+
+        const buttons = document.querySelectorAll(".process-btn");
+        buttons.forEach(b => b.disabled = true);
+
+        if (WEBHOOK_URL === "ВСТАВТЕ_ВАШ_WEBHOOK_URL_СЮДИ") {
+            alert("✅ УСПІХ!\n\nДані:\nПрацівник: " + email + "\nПроцес: " + processName + "\nВиробів: " + itemsArray.length);
+            scannedItems.clear();
+            updateScannedUI();
+            buttons.forEach(b => b.disabled = false);
+            return;
+        }
+
+        fetch(WEBHOOK_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        })
+        .then(response => {
+            alert("✅ Дані відправлено!");
+            scannedItems.clear();
+            updateScannedUI();
+        })
+        .catch(error => {
+            alert("❌ Помилка відправки.");
+        })
+        .finally(() => {
+            buttons.forEach(b => b.disabled = false);
+        });
+    }
+</script>
+
+</body>
+</html>
