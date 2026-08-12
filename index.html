@@ -174,7 +174,7 @@
         const buttons = document.querySelectorAll(".process-btn");
         buttons.forEach(b => b.disabled = true);
 
-        if (WEBHOOK_URL === "ВСТАВТЕ_ВАШ_WEBHOOK_URL_СЮДИ") {
+        if (WEBHOOK_URL === "https://default72f43a8cba9c4477b13bbff064a535.0e.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/16/workflows/e9cda871677c4fe78e30482505694602/triggers/manual/paths/invoke?api-version=1") {
             alert("✅ УСПІХ!\n\nДані:\nПрацівник: " + email + "\nПроцес: " + processName + "\nВиробів: " + itemsArray.length);
             scannedItems.clear();
             updateScannedUI();
