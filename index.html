@@ -19,8 +19,8 @@
         #scanner-section { display: none; }
         #reader { width: 100%; margin-bottom: 20px; }
         
-        #scanned-list { list-style: none; padding: 0; margin: 0 0 20px 0; max-height: 150px; overflow-y: auto; border: 1px solid #eee; }
-        #scanned-list li { padding: 10px; border-bottom: 1px solid #eee; background: #f9f9f9; font-family: monospace; font-size: 16px; display: flex; justify-content: space-between; }
+        #scanned-list { list-style: none; padding: 0; margin: 0 0 20px 0; max-height: 180px; overflow-y: auto; border: 1px solid #eee; border-radius: 5px;}
+        #scanned-list li { padding: 10px; border-bottom: 1px solid #eee; background: #f9f9f9; font-family: monospace; font-size: 15px; display: flex; justify-content: space-between; align-items: center;}
         
         .process-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         button.process-btn { padding: 15px 10px; background-color: #28a745; color: white; border: none; border-radius: 5px; font-size: 14px; font-weight: bold; cursor: pointer; }
@@ -43,20 +43,20 @@
 
     <div id="scanner-section">
         <div class="user-info">
-            Працює: <span id="current-user"></span> 
+            Працює: <span id="current-user" style="font-weight: bold; color: #000;"></span> 
             (<a onclick="logout()">Змінити</a>)
         </div>
 
         <div id="reader"></div>
-        <h3 style="margin-bottom: 5px;">Відскановано (<span id="scan-count">0</span>):</h3>
+        <h3 style="margin-bottom: 5px; font-size: 16px;">Відскановано за зміну (<span id="scan-count">0</span>):</h3>
         <ul id="scanned-list"></ul>
 
-        <h3 style="margin-bottom: 10px;">Оберіть процес:</h3>
+        <h3 style="margin-bottom: 10px; font-size: 16px;">Оберіть процес:</h3>
         <div class="process-grid">
             <button class="process-btn" onclick="sendData('Зварювання')">Зварювання</button>
             <button class="process-btn" onclick="sendData('Пайка')">Пайка</button>
             <button class="process-btn" onclick="sendData('Обклейка')">Обклейка</button>
-            <button class="process-btn" style="background-color: #ffc107; color: #333;" onclick="sendData('Тестування')">Тестування ВТК</button>
+            <button class="process-btn" style="background-color: #ffc107; color: #333;" onclick="sendData('Тестування ВТК')">Тестування ВТК</button>
         </div>
     </div>
 
@@ -74,13 +74,15 @@
 
     let scannedItems = new Set();
     let html5QrcodeScanner;
+    let currentSerialNumber = ""; 
 
     window.onload = function() {
         const savedEmail = localStorage.getItem("workerEmail");
         if (savedEmail && allowedEmails.includes(savedEmail)) {
             showScanner(savedEmail);
         } else {
-            logout(); 
+            document.getElementById("auth-section").style.display = "block";
+            document.getElementById("scanner-section").style.display = "none";
         }
     };
 
@@ -106,66 +108,97 @@
         localStorage.removeItem("workerEmail");
         document.getElementById("auth-section").style.display = "block";
         document.getElementById("scanner-section").style.display = "none";
-        if(html5QrcodeScanner){
+        if (html5QrcodeScanner) {
             html5QrcodeScanner.clear();
         }
+        document.getElementById("scanned-list").innerHTML = "";
+        document.getElementById("scan-count").innerText = "0";
+        scannedItems.clear();
+        currentSerialNumber = "";
     }
 
     function showScanner(email) {
         document.getElementById("auth-section").style.display = "none";
         document.getElementById("scanner-section").style.display = "block";
-        document.getElementById("worker-email-display").innerText = "Працівник: " + email;
+        document.getElementById("current-user").innerText = email; 
 
-        html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-        html5QrcodeScanner.render(onScanSuccess);
+        setTimeout(() => {
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+            html5QrcodeScanner.render(onScanSuccess);
+        }, 100);
     }
 
     function onScanSuccess(decodedText) {
-        document.getElementById("result").innerText = decodedText;
+        if (scannedItems.has(decodedText)) {
+            return; 
+        }
+
+        if (currentSerialNumber !== decodedText) {
+            currentSerialNumber = decodedText;
+            
+            const list = document.getElementById("scanned-list");
+            const li = document.createElement("li");
+            li.id = "pending-item";
+            li.style.backgroundColor = "#fff3cd"; 
+            li.innerHTML = `<strong>${decodedText}</strong> <span>⌛ Очікує дії</span>`;
+            
+            const oldPending = document.getElementById("pending-item");
+            if (oldPending) oldPending.remove();
+
+            list.insertBefore(li, list.firstChild);
+        }
     }
 
     function sendData(operation) {
-        const serialNumber = document.getElementById("result").innerText;
+        if (currentSerialNumber === "") {
+            alert("Спочатку відскануйте серійний номер батареї!");
+            return;
+        }
+
+        if (scannedItems.has(currentSerialNumber)) {
+            alert("Цей серійний номер вже відправлено!");
+            return;
+        }
+
         const workerEmail = localStorage.getItem("workerEmail");
-
-        if (serialNumber === "..." || serialNumber === "") {
-            alert("Спочатку відскануйте серійний номер!");
-            return;
+        const pendingItem = document.getElementById("pending-item");
+        
+        if (pendingItem) {
+            pendingItem.innerHTML = `<strong>${currentSerialNumber}</strong> <span>Відправка...</span>`;
         }
 
-        // Перевірка на дублікати під час цієї сесії
-        if (scannedItems.has(serialNumber)) {
-            alert("Цей серійний номер вже відскановано!");
-            return;
-        }
-
-        // Відправка даних у Power Automate
         fetch(WEBHOOK_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                serialNumber: serialNumber,
+                serialNumber: currentSerialNumber,
                 operation: operation,
                 workerEmail: workerEmail
             })
         })
         .then(response => {
-            if (response.ok || response.status === 202) { // Power Automate часто повертає статус 202
-                alert("Успіх! Операцію записано.");
-                scannedItems.add(serialNumber); // Додаємо до списку відсканованих
-                document.getElementById("result").innerText = "..."; // Очищаємо поле для наступного
+            if (response.ok || response.status === 202) {
+                scannedItems.add(currentSerialNumber);
+                
+                if (pendingItem) {
+                    pendingItem.removeAttribute("id"); 
+                    pendingItem.style.backgroundColor = "#d4edda"; 
+                    pendingItem.innerHTML = `<strong>${currentSerialNumber}</strong> <span style="color: #155724;">✔ ${operation}</span>`;
+                }
+
+                document.getElementById("scan-count").innerText = scannedItems.size;
+                currentSerialNumber = ""; 
             } else {
                 alert("Помилка відправки. Статус: " + response.status);
+                if (pendingItem) pendingItem.innerHTML = `<strong>${currentSerialNumber}</strong> <span style="color: red;">❌ Помилка</span>`;
             }
         })
         .catch(error => {
             alert("Помилка підключення до сервера.");
-            console.error(error);
+            if (pendingItem) pendingItem.innerHTML = `<strong>${currentSerialNumber}</strong> <span style="color: red;">❌ Помилка з'єднання</span>`;
         });
     }
 </script>
 
 </body>
-</html> 
+</html>
