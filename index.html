@@ -65,17 +65,12 @@
 <script>
     const WEBHOOK_URL = "https://default72f43a8cba9c4477b13bbff064a535.0e.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/16/workflows/e9cda871677c4fe78e30482505694602/triggers/manual/paths/invoke?api-version=1";
 
-    // ==========================================
-    // ТУТ СПИСОК ДОЗВОЛЕНИХ ПОШТ ПРАЦІВНИКІВ
-    // Вписуйте їх у лапках, через кому, малими літерами
-    // ==========================================
     const allowedEmails = [
         "ivanenko@gmail.com",
         "petrenko@ukr.net",
         "vlad@gmail.com",
         "test@test.com"
     ];
-    // ==========================================
 
     let scannedItems = new Set();
     let html5QrcodeScanner;
@@ -85,7 +80,7 @@
         if (savedEmail && allowedEmails.includes(savedEmail)) {
             showScanner(savedEmail);
         } else {
-            logout(); // Якщо пошта є, але її видалили зі списку - викидаємо
+            logout(); 
         }
     };
 
@@ -98,13 +93,12 @@
             return;
         }
 
-        // ПЕРЕВІРКА: чи є введена пошта у нашому списку allowedEmails
         if (allowedEmails.includes(emailInput)) {
             errorMsg.style.display = "none";
             localStorage.setItem("workerEmail", emailInput);
             showScanner(emailInput);
         } else {
-            errorMsg.style.display = "block"; // Показуємо помилку
+            errorMsg.style.display = "block"; 
         }
     }
 
@@ -112,91 +106,63 @@
         localStorage.removeItem("workerEmail");
         document.getElementById("auth-section").style.display = "block";
         document.getElementById("scanner-section").style.display = "none";
-        document.getElementById("email-input").value = "";
-        document.getElementById("error-msg").style.display = "none";
-        if(html5QrcodeScanner) { html5QrcodeScanner.clear(); }
+        if(html5QrcodeScanner){
+            html5QrcodeScanner.clear();
+        }
     }
 
     function showScanner(email) {
         document.getElementById("auth-section").style.display = "none";
         document.getElementById("scanner-section").style.display = "block";
-        document.getElementById("current-user").innerText = email;
-        startCamera();
+        document.getElementById("worker-email-display").innerText = "Працівник: " + email;
+
+        html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+        html5QrcodeScanner.render(onScanSuccess);
     }
 
-    function startCamera() {
-        html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-            fps: 10, 
-            qrbox: {width: 250, height: 250},
-            aspectRatio: 1.0,
-            disableFlip: false 
-        });
-        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    function onScanSuccess(decodedText) {
+        document.getElementById("result").innerText = decodedText;
     }
 
-    function onScanSuccess(decodedText, decodedResult) {
-        if (!scannedItems.has(decodedText)) {
-            scannedItems.add(decodedText);
-            updateScannedUI();
-            if (navigator.vibrate) { navigator.vibrate(100); }
-        }
-    }
+    function sendData(operation) {
+        const serialNumber = document.getElementById("result").innerText;
+        const workerEmail = localStorage.getItem("workerEmail");
 
-    function onScanFailure(error) {}
-
-    function updateScannedUI() {
-        const listElement = document.getElementById("scanned-list");
-        const countElement = document.getElementById("scan-count");
-        listElement.innerHTML = "";
-        scannedItems.forEach(item => {
-            const li = document.createElement("li");
-            li.innerText = item;
-            listElement.appendChild(li);
-        });
-        countElement.innerText = scannedItems.size;
-    }
-
-    function sendData(processName) {
-        if (scannedItems.size === 0) {
-            alert("Відскануйте хоча б один виріб!");
+        if (serialNumber === "..." || serialNumber === "") {
+            alert("Спочатку відскануйте серійний номер!");
             return;
         }
 
-        const email = localStorage.getItem("workerEmail");
-        const itemsArray = Array.from(scannedItems);
-        const payload = {
-            "workerEmail": email,
-            "process": processName,
-            "serialNumbers": itemsArray,
-            "timestamp": new Date().toISOString()
-        };
-
-        const buttons = document.querySelectorAll(".process-btn");
-        buttons.forEach(b => b.disabled = true);
-
-        if (WEBHOOK_URL === "https://default72f43a8cba9c4477b13bbff064a535.0e.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/16/workflows/e9cda871677c4fe78e30482505694602/triggers/manual/paths/invoke?api-version=1") {
-            alert("✅ УСПІХ!\n\nДані:\nПрацівник: " + email + "\nПроцес: " + processName + "\nВиробів: " + itemsArray.length);
-            scannedItems.clear();
-            updateScannedUI();
-            buttons.forEach(b => b.disabled = false);
+        // Перевірка на дублікати під час цієї сесії
+        if (scannedItems.has(serialNumber)) {
+            alert("Цей серійний номер вже відскановано!");
             return;
         }
 
+        // Відправка даних у Power Automate
         fetch(WEBHOOK_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                serialNumber: serialNumber,
+                operation: operation,
+                workerEmail: workerEmail
+            })
         })
         .then(response => {
-            alert("✅ Дані відправлено!");
-            scannedItems.clear();
-            updateScannedUI();
+            if (response.ok || response.status === 202) { // Power Automate часто повертає статус 202
+                alert("Успіх! Операцію записано.");
+                scannedItems.add(serialNumber); // Додаємо до списку відсканованих
+                document.getElementById("result").innerText = "..."; // Очищаємо поле для наступного
+            } else {
+                alert("Помилка відправки. Статус: " + response.status);
+            }
         })
         .catch(error => {
-            alert("❌ Помилка відправки.");
-        })
-        .finally(() => {
-            buttons.forEach(b => b.disabled = false);
+            alert("Помилка підключення до сервера.");
+            console.error(error);
         });
     }
 </script>
