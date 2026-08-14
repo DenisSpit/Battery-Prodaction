@@ -368,7 +368,7 @@ function sendData(operation) {
         li.querySelector(".status").innerText =
             "Відправка...";
 
-        fetch(WEBHOOK_URL, {"https://default72f43a8cba9c4477b13bbff064a535.0e.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/16/workflows/e9cda871677c4fe78e30482505694602/triggers/manual/paths/invoke?api-version=1"
+        fetch(WEBHOOK_URL, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
