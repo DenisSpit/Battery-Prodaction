@@ -310,13 +310,121 @@ function showScanner(email) {
 
 function onScanSuccess(decodedText) {
 
-    alert("Скановано: " + decodedText);
+    if (
+        scannedItems.has(decodedText) ||
+        pendingScans.some(item => item.serial === decodedText)
+    ) {
+        return;
+    }
+
+    const list = document.getElementById("scanned-list");
+
+    const li = document.createElement("li");
+
+    li.style.backgroundColor = "#fff3cd";
+
+    li.innerHTML =
+        `<strong>${decodedText}</strong>
+        <span class="status">⌛ Очікує дії</span>`;
+
+    list.insertBefore(li, list.firstChild);
 
     pendingScans.push({
-        serial: decodedText
+        serial: decodedText,
+        li: li
     });
 
-    alert("У черзі: " + pendingScans.length);
+    document.getElementById("scan-count").innerText =
+        pendingScans.length;
+}
+
+
+
+function sendData(operation) {
+
+    if (pendingScans.length === 0) {
+
+        alert(
+            "Спочатку відскануйте хоча б один серійний номер батареї!"
+        );
+
+        return;
+    }
+
+    const workerEmail =
+        localStorage.getItem("workerEmail");
+
+    const itemsToProcess =
+        [...pendingScans];
+
+    pendingScans = [];
+
+    itemsToProcess.forEach(item => {
+
+        const { serial, li } = item;
+
+        li.querySelector(".status").innerText =
+            "Відправка...";
+
+        fetch(WEBHOOK_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                serialNumber: serial,
+                operation: operation,
+                workerEmail: workerEmail
+            })
+        })
+
+        .then(response => {
+
+            if (response.ok || response.status === 202) {
+
+                scannedItems.add(serial);
+
+                li.style.backgroundColor = "#d4edda";
+
+                li.innerHTML =
+                    `<strong>${serial}</strong>
+                    <span style="color:#155724;">
+                    ✔ ${operation}
+                    </span>`;
+
+                document.getElementById("scan-count").innerText =
+                    scannedItems.size;
+
+            } else {
+
+                pendingScans.push(item);
+
+                li.style.backgroundColor = "#f8d7da";
+
+                li.innerHTML =
+                    `<strong>${serial}</strong>
+                    <span style="color:red;">
+                    ❌ Помилка
+                    </span>`;
+            }
+        })
+
+        .catch(error => {
+
+            console.error(error);
+
+            pendingScans.push(item);
+
+            li.style.backgroundColor = "#f8d7da";
+
+            li.innerHTML =
+                `<strong>${serial}</strong>
+                <span style="color:red;">
+                ❌ З'єднання
+                </span>`;
+        });
+
+    });
 }
 
 function sendData(operation) {
