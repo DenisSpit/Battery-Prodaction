@@ -1,209 +1,4 @@
-<!DOCTYPE html>
-<html lang="uk">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Виробничий Сканер</title>
-
-    <script src="https://unpkg.com/html5-qrcode"></script>
-
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f7f6;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 400px;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        h2 {
-            text-align: center;
-            color: #333;
-            margin-top: 0;
-        }
-
-        #auth-section {
-            display: block;
-        }
-
-        input[type="email"] {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            font-size: 16px;
-        }
-
-        button.primary {
-            width: 100%;
-            padding: 12px;
-            background-color: #0078D4;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        #error-msg {
-            color: #d9534f;
-            font-weight: bold;
-            text-align: center;
-            margin-top: 10px;
-            display: none;
-        }
-
-        #scanner-section {
-            display: none;
-        }
-
-        #reader {
-            width: 100%;
-            margin-bottom: 20px;
-        }
-
-        #scanned-list {
-            list-style: none;
-            padding: 0;
-            margin: 0 0 20px 0;
-            max-height: 180px;
-            overflow-y: auto;
-            border: 1px solid #eee;
-            border-radius: 5px;
-        }
-
-        #scanned-list li {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-            background: #f9f9f9;
-            font-family: monospace;
-            font-size: 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .process-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
-
-        button.process-btn {
-            padding: 15px 10px;
-            background-color: #28a745;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 14px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        button.process-btn:active {
-            background-color: #218838;
-        }
-
-        .user-info {
-            text-align: center;
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 15px;
-        }
-
-        .user-info a {
-            color: #d9534f;
-            text-decoration: none;
-            font-weight: bold;
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body>
-
-<div class="container">
-
-    <div id="auth-section">
-        <h2>Вхід у систему</h2>
-
-        <input
-            type="email"
-            id="email-input"
-            placeholder="Введіть дозволену пошту"
-            required
-        >
-
-        <button class="primary" onclick="saveEmail()">
-            Увійти
-        </button>
-
-        <div id="error-msg">
-            Доступ заборонено! Пошти немає в базі.
-        </div>
-    </div>
-
-    <div id="scanner-section">
-
-        <div class="user-info">
-            Працює:
-            <span id="current-user" style="font-weight:bold;color:#000;"></span>
-            (<a onclick="logout()">Змінити</a>)
-        </div>
-
-        <div id="reader"></div>
-
-        <h3 style="margin-bottom:5px;font-size:16px;">
-            Відскановано за зміну
-            (<span id="scan-count">0</span>):
-        </h3>
-
-        <ul id="scanned-list"></ul>
-
-        <h3 style="margin-bottom:10px;font-size:16px;">
-            Оберіть процес:
-        </h3>
-
-        <div class="process-grid">
-            <button class="process-btn" onclick="sendData('Зварювання')">
-                Зварювання
-            </button>
-
-            <button class="process-btn" onclick="sendData('Пайка')">
-                Пайка
-            </button>
-
-            <button class="process-btn" onclick="sendData('Обклейка')">
-                Обклейка
-            </button>
-
-            <button
-                class="process-btn"
-                style="background-color:#ffc107;color:#333;"
-                onclick="sendData('Тестування ВТК')"
-            >
-                Тестування ВТК
-            </button>
-        </div>
-    </div>
-
-</div>
-
 <script>
-
 const WEBHOOK_URL =
 "https://default72f43a8cba9c4477b13bbff064a535.0e.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/16/workflows/e9cda871677c4fe78e30482505694602/triggers/manual/paths/invoke?api-version=1";
 
@@ -216,7 +11,7 @@ const allowedEmails = [
 
 let scannedItems = new Set();
 let pendingScans = [];
-let html5QrcodeScanner;
+let html5QrcodeScanner = null;
 
 window.onload = function () {
 
@@ -232,53 +27,47 @@ window.onload = function () {
 
 function saveEmail() {
 
-    const emailInput =
-        document.getElementById("email-input")
+    const email = document
+        .getElementById("email-input")
         .value
         .trim()
         .toLowerCase();
 
     const errorMsg = document.getElementById("error-msg");
 
-    if (emailInput === "") {
+    if (!email) {
         alert("Введіть пошту!");
         return;
     }
 
-    if (allowedEmails.includes(emailInput)) {
-
-        errorMsg.style.display = "none";
-
-        localStorage.setItem(
-            "workerEmail",
-            emailInput
-        );
-
-        showScanner(emailInput);
-
-    } else {
-
+    if (!allowedEmails.includes(email)) {
         errorMsg.style.display = "block";
-
+        return;
     }
+
+    errorMsg.style.display = "none";
+
+    localStorage.setItem("workerEmail", email);
+
+    showScanner(email);
 }
 
 function logout() {
 
     localStorage.removeItem("workerEmail");
 
-    document.getElementById("auth-section").style.display = "block";
-    document.getElementById("scanner-section").style.display = "none";
-
-    if (html5QrcodeScanner) {
-        html5QrcodeScanner.clear().catch(err => console.log(err));
-    }
+    scannedItems.clear();
+    pendingScans = [];
 
     document.getElementById("scanned-list").innerHTML = "";
     document.getElementById("scan-count").innerText = "0";
 
-    scannedItems.clear();
-    pendingScans = [];
+    document.getElementById("scanner-section").style.display = "none";
+    document.getElementById("auth-section").style.display = "block";
+
+    if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear().catch(() => {});
+    }
 }
 
 function showScanner(email) {
@@ -294,14 +83,13 @@ function showScanner(email) {
             html5QrcodeScanner.clear().catch(() => {});
         }
 
-        html5QrcodeScanner =
-            new Html5QrcodeScanner(
-                "reader",
-                {
-                    fps: 10,
-                    qrbox: 250
-                }
-            );
+        html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader",
+            {
+                fps: 10,
+                qrbox: 250
+            }
+        );
 
         html5QrcodeScanner.render(onScanSuccess);
 
@@ -312,7 +100,7 @@ function onScanSuccess(decodedText) {
 
     if (
         scannedItems.has(decodedText) ||
-        pendingScans.some(item => item.serial === decodedText)
+        pendingScans.some(x => x.serial === decodedText)
     ) {
         return;
     }
@@ -335,36 +123,32 @@ function onScanSuccess(decodedText) {
     });
 
     document.getElementById("scan-count").innerText =
-        pendingScans.length;
+        pendingScans.length + scannedItems.size;
 }
-
-
 
 function sendData(operation) {
 
     if (pendingScans.length === 0) {
-
-        alert(
-            "Спочатку відскануйте хоча б один серійний номер батареї!"
-        );
-
+        alert("Спочатку відскануйте хоча б один серійний номер батареї!");
         return;
     }
 
     const workerEmail =
         localStorage.getItem("workerEmail");
 
-    const itemsToProcess =
-        [...pendingScans];
+    const itemsToProcess = [...pendingScans];
 
     pendingScans = [];
 
     itemsToProcess.forEach(item => {
 
-        const { serial, li } = item;
+        const serial = item.serial;
+        const li = item.li;
 
-        li.querySelector(".status").innerText =
-            "Відправка...";
+        if (li.querySelector(".status")) {
+            li.querySelector(".status").innerText =
+                "Відправка...";
+        }
 
         fetch(WEBHOOK_URL, {
             method: "POST",
@@ -377,7 +161,6 @@ function sendData(operation) {
                 workerEmail: workerEmail
             })
         })
-
         .then(response => {
 
             if (response.ok || response.status === 202) {
@@ -389,11 +172,8 @@ function sendData(operation) {
                 li.innerHTML =
                     `<strong>${serial}</strong>
                     <span style="color:#155724;">
-                    ✔ ${operation}
+                        ✔ ${operation}
                     </span>`;
-
-                document.getElementById("scan-count").innerText =
-                    scannedItems.size;
 
             } else {
 
@@ -404,11 +184,13 @@ function sendData(operation) {
                 li.innerHTML =
                     `<strong>${serial}</strong>
                     <span style="color:red;">
-                    ❌ Помилка
+                        ❌ Помилка
                     </span>`;
             }
-        })
 
+            document.getElementById("scan-count").innerText =
+                pendingScans.length + scannedItems.size;
+        })
         .catch(error => {
 
             console.error(error);
@@ -420,99 +202,13 @@ function sendData(operation) {
             li.innerHTML =
                 `<strong>${serial}</strong>
                 <span style="color:red;">
-                ❌ З'єднання
+                    ❌ З'єднання
                 </span>`;
+
+            document.getElementById("scan-count").innerText =
+                pendingScans.length + scannedItems.size;
         });
 
     });
 }
-
-function sendData(operation) {
-
-    alert("sendData");
-    alert("У черзі перед відправкою: " + pendingScans.length);
-
-    if (pendingScans.length === 0) {
-        alert("Черга порожня");
-        return;
-    }
-
-    alert("Дані будуть відправлені");
-}
-
-    const workerEmail =
-        localStorage.getItem("workerEmail");
-
-    const itemsToProcess = [...pendingScans];
-
-    pendingScans = [];
-
-    itemsToProcess.forEach(item => {
-
-        const { serial, li } = item;
-
-        li.querySelector(".status").innerText =
-            "Відправка...";
-
-        fetch(WEBHOOK_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                serialNumber: serial,
-                operation: operation,
-                workerEmail: workerEmail
-            })
-        })
-        .then(response => {
-
-            console.log("STATUS:", response.status);
-
-            if (response.ok || response.status === 202) {
-
-                scannedItems.add(serial);
-
-                li.style.backgroundColor = "#d4edda";
-
-                li.innerHTML =
-                    `<strong>${serial}</strong>
-                    <span style="color:#155724;">
-                    ✔ ${operation}
-                    </span>`;
-
-            } else {
-
-                pendingScans.push(item);
-
-                li.style.backgroundColor = "#f8d7da";
-
-                li.innerHTML =
-                    `<strong>${serial}</strong>
-                    <span style="color:red;">
-                    ❌ Помилка
-                    </span>`;
-            }
-        })
-        .catch(error => {
-
-            console.error("FETCH ERROR:", error);
-
-            pendingScans.push(item);
-
-            li.style.backgroundColor = "#f8d7da";
-
-            li.innerHTML =
-                `<strong>${serial}</strong>
-                <span style="color:red;">
-                ❌ З'єднання
-                </span>`;
-        });
-    });
-
-}
-
 </script>
-
-</body>
-</html>
