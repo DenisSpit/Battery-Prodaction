@@ -6,7 +6,6 @@
     <title>Виробничий Сканер</title>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
-`
 
     <style>
         body {
@@ -195,8 +194,15 @@
 
 <script>
 
+// Адреса твого потоку Power Automate
 const WEBHOOK_URL =
 "https://default72f43a8cba9c4477b13bbff064a535.0e.environment.api.powerplatform.com/powerautomate/automations/direct/cu/16/workflows/e9cda871677c4fe78e30482505694602/triggers/manual/paths/invoke?api-version=1";
+
+// Безкоштовний публічний CORS-проксі (тимчасове рішення для тесту)
+const PROXY_URL = "https://corsproxy.io/?url=";
+
+// Готова адреса для відправки через проксі
+const SEND_URL = PROXY_URL + encodeURIComponent(WEBHOOK_URL);
 
 const allowedEmails = [
     "ivanenko@gmail.com",
@@ -344,7 +350,7 @@ function sendData(operation) {
         const serial = item.serial;
         const li = item.li;
 
-        fetch(WEBHOOK_URL, {
+        fetch(SEND_URL, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
@@ -373,7 +379,7 @@ function sendData(operation) {
 
                 li.innerHTML =
                     `<strong>${serial}</strong>
-                     ❌ Помилка`;
+                     ❌ Помилка (${response.status})`;
 
                 pendingScans.push(item);
             }
